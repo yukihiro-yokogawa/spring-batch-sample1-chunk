@@ -8,8 +8,9 @@ import org.springframework.batch.core.Step;
 import org.springframework.batch.core.configuration.annotation.EnableBatchProcessing;
 import org.springframework.batch.core.configuration.annotation.JobBuilderFactory;
 import org.springframework.batch.core.configuration.annotation.StepBuilderFactory;
+import org.springframework.batch.core.configuration.annotation.StepScope;
 import org.springframework.batch.core.launch.support.RunIdIncrementer;
-import org.springframework.batch.core.step.tasklet.TaskletStep;
+import org.springframework.batch.core.step.tasklet.MethodInvokingTaskletAdapter;
 import org.springframework.batch.item.database.BeanPropertyItemSqlParameterSourceProvider;
 import org.springframework.batch.item.database.JdbcBatchItemWriter;
 import org.springframework.batch.item.file.FlatFileItemReader;
@@ -35,8 +36,13 @@ public class Batch {
 	@Autowired
 	public DataSource dataSource;
 	
-	//Reader
+	/**
+	 * csvファイルを読み込むメソッドです.
+	 * 
+	 * @return
+	 */
 	@Bean
+	@StepScope
 	public FlatFileItemReader<Fruit> reader(){
 		FlatFileItemReader<Fruit> reader = new FlatFileItemReader<>();
 		reader.setResource(new ClassPathResource("fruit_price.csv"));
@@ -53,7 +59,11 @@ public class Batch {
 		
 	}
 	
-	//Processor
+	/**
+	 * Stepの処理部分を返すメソッドです.
+	 * 
+	 * @return
+	 */
 	@Bean
 	public FruitItemProcesser processer() {
 		return new FruitItemProcesser();
@@ -73,11 +83,31 @@ public class Batch {
 	public JobExecutionListener listener() {
 		return new JobStartEndLIstener(new JdbcTemplate(dataSource));
 	}
+	
 
-	// ステップ１
 	@Bean
-	public Step step1() {
-		return stepBuilderFactory.get("step1")
+	public Step truncateStep() {
+		return stepBuilderFactory.get("truncateStep")
+				.tasklet(truncateTasklet()).build();
+	}
+	
+	@Bean
+	public MethodInvokingTaskletAdapter truncateTasklet() {
+		MethodInvokingTaskletAdapter adapter = new MethodInvokingTaskletAdapter();
+		adapter.setTargetObject(truncateService());
+		adapter.setTargetMethod("execute");
+		return adapter;
+	}
+	
+	@Bean
+	public TruncateService truncateService() {
+		return new TruncateServiceImpl();
+	}
+	
+	// 書き込みステップ１
+	@Bean
+	public Step writerStep1() {
+		return stepBuilderFactory.get("writerStep1")
 				.<Fruit, Fruit>chunk(10)
 				.reader(reader())
 				.processor(processer())
@@ -86,8 +116,8 @@ public class Batch {
 	}
 	
 	@Bean
-	public Step step2() {
-		return stepBuilderFactory.get("step2")
+	public Step writerStep2() {
+		return stepBuilderFactory.get("writerStep2")
 				.<Fruit,Fruit> chunk(10)
 				.reader(reader())
 				.processor(processer())
@@ -101,8 +131,9 @@ public class Batch {
 		return jobBuilderFactory.get("testJob")
 				.incrementer(new RunIdIncrementer())
 				.listener(listener())
-				.flow(step1())
-				.next(step2())
+				.flow(truncateStep())
+				.next(writerStep1())
+				.next(writerStep2())
 				.end()
 				.build();
 	}

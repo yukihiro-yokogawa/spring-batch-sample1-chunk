@@ -7,5 +7,4 @@ spring:
 
 
   batch:
-    initializer:
-      enabled=false:
+    initialize-schema: never
