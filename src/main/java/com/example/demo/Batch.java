@@ -37,7 +37,7 @@ public class Batch {
 	public DataSource dataSource;
 	
 	/**
-	 * csvファイルを読み込むメソッドです.
+	 * csvファイルを読み込むreaderメソッドです.
 	 * 
 	 * @return
 	 */
@@ -61,15 +61,17 @@ public class Batch {
 	
 	/**
 	 * Stepの処理部分を返すメソッドです.
-	 * 
-	 * @return
+	 * @return stepの処理（processor）
 	 */
 	@Bean
-	public FruitItemProcesser processer() {
-		return new FruitItemProcesser();
+	public FruitItemProcessor processor() {
+		return new FruitItemProcessor();
 	}
-	
-	// Writer
+
+	/**
+	 * writerの処理をするメソッドです.
+	 * @return
+	 */
 	@Bean
 	public JdbcBatchItemWriter<Fruit> writer() {
 		JdbcBatchItemWriter<Fruit> writer = new JdbcBatchItemWriter<>();
@@ -79,18 +81,29 @@ public class Batch {
 		return writer;
 	}
 
+	/**
+	 * ジョブの実行前、終了後に処理を挟むメソッドです.
+	 * @return
+	 */
 	@Bean
 	public JobExecutionListener listener() {
 		return new JobStartEndLIstener(new JdbcTemplate(dataSource));
 	}
-	
 
+	/**
+	 * ステップの実行を構築するメソッドです.
+	 * @return
+	 */
 	@Bean
 	public Step truncateStep() {
 		return stepBuilderFactory.get("truncateStep")
 				.tasklet(truncateTasklet()).build();
 	}
-	
+
+	/**
+	 *
+	 * @return
+	 */
 	@Bean
 	public MethodInvokingTaskletAdapter truncateTasklet() {
 		MethodInvokingTaskletAdapter adapter = new MethodInvokingTaskletAdapter();
@@ -98,38 +111,55 @@ public class Batch {
 		adapter.setTargetMethod("execute");
 		return adapter;
 	}
-	
+
+	/**
+	 * TruncateStepの実行処理とそれが完了したことを通知する処理を返すメソッドです
+	 * @return
+	 */
 	@Bean
 	public TruncateService truncateService() {
 		return new TruncateServiceImpl();
 	}
-	
-	// 書き込みステップ１
+
+	/**
+	 * ステップの実行を構築するメソッドです.
+	 * @return writerStep1
+	 */
 	@Bean
 	public Step writerStep1() {
 		return stepBuilderFactory.get("writerStep1")
+				//設定した値ごとにTransaction処理を行う.
 				.<Fruit, Fruit>chunk(10)
 				.reader(reader())
-				.processor(processer())
+				.processor(processor())
 				.writer(writer())
 				.build();
 	}
-	
+
+	/**
+	 * ステップの実行を構築するメソッドです.
+	 * @return writerStep2
+	 */
 	@Bean
 	public Step writerStep2() {
 		return stepBuilderFactory.get("writerStep2")
 				.<Fruit,Fruit> chunk(10)
 				.reader(reader())
-				.processor(processer())
+				.processor(processor())
 				.writer(writer())
 				.build();
 	}
-	
-	// ジョブ
+
+	/**
+	 * ジョブ（各ステップ）の実行メソッドです.
+	 * @return
+	 */
 	@Bean
 	public Job testJob() {
-		return jobBuilderFactory.get("testJob")
+		return jobBuilderFactory.get("SampleJob")
+				//これがないと全く同じジョブが実行されたことになり連続で同じジョブが実行されなくなるので必須.
 				.incrementer(new RunIdIncrementer())
+				//startとendの処理を読み込ませる.
 				.listener(listener())
 				.flow(truncateStep())
 				.next(writerStep1())

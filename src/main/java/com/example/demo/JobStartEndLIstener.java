@@ -13,21 +13,27 @@ import org.springframework.jdbc.core.JdbcTemplate;
 public class JobStartEndLIstener extends JobExecutionListenerSupport{
 
 	private final JdbcTemplate jdbcTemplate;
-	
+
 	@Autowired
 	public JobStartEndLIstener(JdbcTemplate jdbcTemplate) {
 		// TODO Auto-generated constructor stub
 		this.jdbcTemplate = jdbcTemplate;
 	}
-	
-	// ステップの開始前に実行
+
+	/**
+	 * ジョブの開始を合図に実行されるメソッドです.
+	 * @param jobExecution
+	 */
 	@Override
 	public void beforeJob(JobExecution jobExecution) {
 		super.beforeJob(jobExecution);
 		System.out.println("開始");
 	}
-	
-	// ステップの終了後に実行
+
+	/**
+	 * ジョブの終了を合図に実行されるメソッドです.
+	 * @param jobExecution
+	 */
 	@Override
 	public void afterJob(JobExecution jobExecution) {
 		super.afterJob(jobExecution);
